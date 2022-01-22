@@ -345,15 +345,21 @@ class CLIP(nn.Module):
         x = x.permute(1, 0, 2)  # LND -> NLD
         x = self.ln_final(x).type(self.dtype)
 
+        # masking x, taking only existing tokens
+        tokens_mask = (text > 0).int()
+
+        # adding a dummy third dimension and repeating 512 times
+        tokens_mask = tokens_mask.unsqueeze(dim=-1).repeat(1, 1, x.shape[-1])
+        all_tokens = x * tokens_mask
         # x.shape = [batch_size, n_ctx, transformer.width]
         # take features from the eot embedding (eot_token is the highest number in each sequence)
         x = x[torch.arange(x.shape[0]), text.argmax(dim=-1)] @ self.text_projection
 
-        return x
+        return x, all_tokens
 
     def forward(self, image, text):
         image_features = self.encode_image(image)
-        text_features = self.encode_text(text)
+        text_features, _ = self.encode_text(text)
 
         # normalized features
         image_features = image_features / image_features.norm(dim=-1, keepdim=True)
